@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Location → CD</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#0b0d10; --card:#14181d; --card2:#1b2027; --line:#262d36;
+    --txt:#f2f5f8; --dim:#8b96a5; --accent:#3ddc97; --warn:#ffb454;
+  }
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #16202a 0%, var(--bg) 60%);
+    color:var(--txt); font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    padding:18px 16px calc(28px + env(safe-area-inset-bottom));
+    min-height:100dvh;
+  }
+  .wrap{width:100%;max-width:460px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;margin:6px 4px 16px}
+  .ttl{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  .badge{font-size:11px;color:#6f7b8a;border:1px solid var(--line);border-radius:999px;padding:4px 9px}
+  .field{position:relative}
+  .prefix{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:#5d6875;font-size:26px;font-weight:700;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+  input{
+    width:100%;padding:18px 76px 18px 66px;font-size:26px;font-weight:700;letter-spacing:.12em;
+    background:var(--card);border:1px solid var(--line);border-radius:16px;color:var(--txt);
+    outline:none;font-variant-numeric:tabular-nums;
+  }
+  input:focus{border-color:#3ddc9755;box-shadow:0 0 0 4px #3ddc9714}
+  .mic{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:50px;height:50px;border-radius:14px;
+       border:1px solid var(--line);background:var(--card2);color:var(--dim);display:grid;place-items:center;cursor:pointer}
+  .mic svg{width:22px;height:22px;fill:currentColor}
+  .mic.on{background:#12352a;border-color:#3ddc9766;color:var(--accent);animation:pulse 1.6s ease-in-out infinite}
+  .mic.unsup{opacity:.55}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #3ddc9700}50%{box-shadow:0 0 0 7px #3ddc9718}}
+  .status{margin:10px 4px 0;font-size:13px;color:#6f7b8a;min-height:18px}
+  .out{margin-top:14px;border-radius:20px;padding:24px 20px;text-align:center;
+       background:var(--card);border:1px solid var(--line);min-height:168px;
+       display:flex;flex-direction:column;justify-content:center;align-items:center;transition:.18s}
+  .out.ok{border-color:#3ddc9740;background:linear-gradient(180deg,#14251e,#12171c)}
+  .out.miss{border-color:#ffb45440;background:linear-gradient(180deg,#241d12,#171a1f)}
+  .out.listening{border-color:#3ddc9733}
+  .cd{font-size:84px;line-height:.95;font-weight:800;letter-spacing:.02em;font-variant-numeric:tabular-nums;color:var(--accent)}
+  .out.miss .cd{font-size:26px;color:var(--warn);font-weight:700}
+  .sub{margin-top:10px;color:var(--dim);font-size:14px;letter-spacing:.06em}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+  .chip{background:var(--card2);border:1px solid var(--line);color:#cfd8e3;border-radius:999px;
+        padding:7px 13px;font-size:14px;cursor:pointer;font-variant-numeric:tabular-nums}
+  .chip:active{transform:scale(.97)}
+  .toggles{display:flex;gap:8px;margin-top:14px}
+  .tgl{flex:1;background:var(--card);border:1px solid var(--line);color:var(--dim);border-radius:13px;
+       padding:12px 8px;font-size:12.5px;cursor:pointer;font-weight:600;letter-spacing:.02em}
+  .tgl.on{background:#12352a;border-color:#3ddc9755;color:var(--accent)}
+  .pad{display:none;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px}
+  .pad.show{display:grid}
+  .pad button{background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:14px;
+              padding:16px 0;font-size:22px;font-weight:700;cursor:pointer;font-variant-numeric:tabular-nums}
+  .pad button:active{background:var(--card2)}
+  .pad button.fn{color:var(--dim);font-size:17px}
+  .hist{margin-top:18px}
+  .hhead{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#6f7b8a;
+         letter-spacing:.1em;text-transform:uppercase;margin:0 4px 6px}
+  .hhead button{background:none;border:0;color:#6f7b8a;font-size:12px;cursor:pointer}
+  .hrow{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--card);
+        border:1px solid var(--line);border-radius:13px;margin-bottom:7px;cursor:pointer}
+  .hrow .hl{color:#9aa6b4;font-size:14px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+  .hrow .hc{margin-left:auto;color:var(--accent);font-weight:800;font-size:20px;font-variant-numeric:tabular-nums}
+  .hrow .sp{opacity:.5;font-size:15px}
+  .empty{color:#5b6673;font-size:13px;padding:4px}
+  .btn{width:100%;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:12px;
+       padding:12px;font-size:13px;cursor:pointer;margin-top:6px}
+  .all{margin-top:12px;display:none;max-height:46vh;overflow:auto;border:1px solid var(--line);
+       border-radius:14px;background:var(--card)}
+  .all.show{display:block}
+  .row{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #1e242c;
+       font-variant-numeric:tabular-nums;font-size:14px}
+  .row:last-child{border-bottom:0}
+  .row b{color:var(--accent);font-weight:700}
+  .row span{color:#9aa6b4;letter-spacing:.04em}
+  .note{margin:14px 4px 0;font-size:11.5px;color:#55606d;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="ttl">Location → CD</div>
+    <div class="badge" id="badge">343 rows</div>
+  </header>
+
+  <div class="field">
+    <div class="prefix">MA</div>
+    <input id="loc" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="6" placeholder="000">
+    <button class="mic" id="mic" aria-label="Voice input" title="Voice input">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+    </button>
+  </div>
+  <div class="status" id="status">Tap the mic and say a number</div>
+
+  <div class="out" id="out">
+    <div class="cd" id="cd">—</div>
+    <div class="sub" id="sub">Type or say a location number</div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="toggles">
+    <button class="tgl" id="tListen">Keep listening</button>
+    <button class="tgl" id="tSpeak">Speak answer</button>
+    <button class="tgl" id="tPad">Keypad</button>
+  </div>
+
+  <div class="pad" id="pad">
+    <button data-d="1">1</button><button data-d="2">2</button><button data-d="3">3</button>
+    <button data-d="4">4</button><button data-d="5">5</button><button data-d="6">6</button>
+    <button data-d="7">7</button><button data-d="8">8</button><button data-d="9">9</button>
+    <button class="fn" data-a="clear">C</button><button data-d="0">0</button><button class="fn" data-a="del">⌫</button>
+  </div>
+
+  <div class="hist">
+    <div class="hhead"><span>Recent</span><button id="hclear">clear</button></div>
+    <div id="hist"><div class="empty">Nothing yet</div></div>
+  </div>
+
+  <button class="btn" id="toggle">Browse all rows</button>
+  <div class="all" id="all"></div>
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+const DATA = {"001":"60","002":"73","003":"86","004":"02","005":"15","006":"28","007":"41","008":"54","009":"67","010":"58","011":"71","012":"84","013":"00","014":"13","015":"26","016":"39","017":"52","018":"65","019":"78","020":"69","500":"82","501":"95","502":"11","503":"24","504":"37","505":"50","506":"63","507":"76","508":"89","509":"05","510":"93","511":"09","512":"22","513":"35","514":"48","515":"61","516":"74","517":"87","518":"03","519":"16","520":"07","521":"20","522":"33","523":"46","524":"59","525":"72","526":"85","527":"01","528":"14","529":"27","530":"18","531":"31","532":"44","533":"57","534":"70","535":"83","536":"96","537":"12","538":"25","539":"38","540":"29","541":"42","542":"55","543":"68","544":"81","545":"94","546":"10","547":"23","548":"36","549":"49","550":"40","551":"53","552":"66","553":"79","554":"92","555":"08","556":"21","557":"34","558":"47","559":"60","560":"51","561":"64","562":"77","563":"90","564":"06","565":"19","566":"32","567":"45","568":"58","569":"71","570":"62","571":"75","572":"88","573":"04","574":"17","575":"30","576":"43","577":"56","578":"69","579":"82","580":"73","581":"86","582":"02","583":"15","584":"28","585":"41","586":"54","587":"67","588":"80","589":"93","590":"84","591":"00","592":"13","593":"26","594":"39","595":"52","596":"65","597":"78","598":"91","599":"07","600":"89","601":"05","602":"18","603":"31","604":"44","606":"70","607":"83","608":"96","609":"12","610":"03","611":"16","612":"29","613":"42","614":"55","615":"68","616":"81","617":"94","618":"10","619":"23","620":"14","621":"27","622":"40","623":"53","624":"66","625":"79","626":"92","627":"08","628":"21","629":"34","630":"25","631":"38","632":"51","633":"64","634":"77","635":"90","636":"06","637":"19","638":"32","639":"45","640":"36","641":"49","642":"62","643":"75","644":"88","645":"04","646":"17","647":"30","648":"43","649":"56","650":"47","651":"60","652":"73","653":"86","654":"02","655":"15","656":"28","657":"41","658":"54","659":"67","700":"12","701":"12","702":"25","703":"38","704":"51","705":"64","706":"77","707":"90","708":"06","709":"19","710":"10","711":"23","712":"36","713":"49","714":"62","715":"75","716":"88","717":"04","718":"17","719":"30","720":"21","721":"34","722":"47","723":"60","724":"73","725":"86","726":"02","727":"15","728":"28","729":"41","730":"32","731":"45","732":"58","733":"71","734":"84","735":"00","736":"13","737":"26","738":"39","739":"52","740":"43","741":"56","742":"69","743":"82","744":"95","745":"11","746":"24","747":"37","748":"50","749":"63","750":"54","751":"67","752":"80","753":"93","754":"09","755":"22","756":"35","757":"48","758":"61","759":"74","760":"65","761":"78","762":"91","763":"07","764":"20","765":"33","766":"46","767":"59","768":"72","769":"85","770":"76","771":"89","772":"05","773":"18","774":"31","775":"44","776":"57","777":"70","778":"83","779":"96","780":"87","781":"03","782":"16","783":"29","784":"42","785":"55","786":"68","787":"81","788":"94","789":"10","790":"01","791":"14","792":"27","793":"40","794":"53","795":"66","796":"79","797":"92","798":"08","799":"21","800":"06","801":"19","802":"32","803":"45","804":"58","805":"71","806":"84","807":"00","808":"13","809":"26","810":"17","811":"30","812":"43","813":"56","814":"69","815":"82","816":"95","817":"11","818":"24","819":"37","820":"28","821":"41","822":"54","823":"67","824":"80","825":"93","826":"09","827":"22","828":"35","829":"48","830":"39","831":"52","832":"65","833":"78","834":"91","835":"07","836":"20","837":"33","838":"46","839":"59","840":"50","841":"63","842":"76","843":"89","844":"05","845":"18","846":"31","847":"44","848":"57","849":"70","850":"61","851":"74","852":"87","853":"03","854":"16","855":"29","856":"42","857":"55","858":"68","859":"81","860":"72","861":"85","862":"01","863":"14"};
+const KEYS = Object.keys(DATA);
+const DIGIT_WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine'];
+const WORD2DIGIT = {zero:'0',oh:'0',o:'0',nought:'0',one:'1',two:'2',three:'3',four:'4',five:'5',six:'6',seven:'7',eight:'8',nine:'9'};
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const CAN_SPEAK = ('speechSynthesis' in window);
+
+const el = {
+  input: document.getElementById('loc'),
+  mic: document.getElementById('mic'),
+  status: document.getElementById('status'),
+  out: document.getElementById('out'),
+  cd: document.getElementById('cd'),
+  sub: document.getElementById('sub'),
+  chips: document.getElementById('chips'),
+  tListen: document.getElementById('tListen'),
+  tSpeak: document.getElementById('tSpeak'),
+  tPad: document.getElementById('tPad'),
+  pad: document.getElementById('pad'),
+  hist: document.getElementById('hist'),
+  all: document.getElementById('all'),
+  badge: document.getElementById('badge'),
+  note: document.getElementById('note')
+};
+
+const state = { listen:false, speak:true, pad:false, key:null, cd:null,
+                rec:null, recActive:false, lastSpoken:'', wake:null };
+
+/* ---------- prefs ---------- */
+function savePrefs(){
+  try{ localStorage.setItem('cd.prefs', JSON.stringify({listen:state.listen, speak:state.speak, pad:state.pad})); }catch(e){}
+}
+function loadPrefs(){
+  try{
+    const p = JSON.parse(localStorage.getItem('cd.prefs') || '{}');
+    if(typeof p.speak === 'boolean') state.speak = p.speak;
+    if(typeof p.pad === 'boolean') state.pad = p.pad;
+    state.listen = false; // never auto-open the mic without a tap
+  }catch(e){}
+}
+
+/* ---------- helpers ---------- */
+function pad3(v){ return String(v).padStart(3,'0'); }
+function setInput(v){ el.input.value = String(v).replace(/\D/g,'').slice(0,3); }
+function setStatus(t){ el.status.textContent = t; }
+
+function spell(s){
+  return String(s).split('').map(ch => /\d/.test(ch) ? DIGIT_WORDS[+ch] : ch).join(' ');
+}
+
+function parsePhrase(text){
+  let t = String(text).toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
+  if(!t) return '';
+  t = t.replace(/\b(double|triple)\s+([a-z0-9]+)/g, function(m, w, d){
+    const c = (WORD2DIGIT[d] !== undefined) ? WORD2DIGIT[d] : (/^\d$/.test(d) ? d : null);
+    if(c === null) return m;
+    return w === 'double' ? c + ' ' + c : c + ' ' + c + ' ' + c;
+  });
+  let digits = '';
+  t.split(' ').forEach(function(tk){
+    if(/^\d+$/.test(tk)) digits += tk;
+    else if(WORD2DIGIT[tk] !== undefined) digits += WORD2DIGIT[tk];
+  });
+  digits = digits.replace(/\D/g,'');
+  return digits.slice(-3);
+}
+
+/* ---------- speech out ---------- */
+let speechTimer = null;
+function say(text){
+  if(!state.speak || !CAN_SPEAK || !text) return;
+  const wasActive = state.recActive;
+  if(wasActive) stopRec();
+  state.lastSpoken = text;
+  try{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-GB'; u.rate = 0.95; u.pitch = 1;
+    u.onend = function(){ if(state.listen) setTimeout(startRec, 400); };
+    window.speechSynthesis.speak(u);
+    /* watchdog: some browsers never fire onend — don't strand the mic */
+    if(state.listen){
+      if(speechTimer) clearTimeout(speechTimer);
+      speechTimer = setTimeout(function(){ if(state.listen && !state.recActive) startRec(); }, 6000);
+    }
+  }catch(e){}
+}
+
+function speakRow(key, cd){
+  say('M A ' + spell(key) + '. C D ' + spell(cd) + '.');
+}
+
+/* ---------- history ---------- */
+function histGet(){
+  try{ return JSON.parse(localStorage.getItem('cd.hist') || '[]'); }catch(e){ return []; }
+}
+function histPush(key, cd){
+  let h = histGet().filter(function(x){ return x.k !== key; });
+  h.unshift({k:key, c:cd, t:Date.now()});
+  h = h.slice(0,20);
+  try{ localStorage.setItem('cd.hist', JSON.stringify(h)); }catch(e){}
+  drawHist();
+}
+/* wait for typing to settle before recording, so 8-3-1 records MA831 once */
+let histTimer = null;
+function histQueue(key, cd, immediate){
+  if(histTimer){ clearTimeout(histTimer); histTimer = null; }
+  if(immediate){ histPush(key, cd); return; }
+  histTimer = setTimeout(function(){ histPush(key, cd); }, 650);
+}
+function drawHist(){
+  const h = histGet().slice(0,8);
+  if(!h.length){ el.hist.innerHTML = '<div class="empty">Nothing yet</div>'; return; }
+  el.hist.innerHTML = h.map(function(x){
+    return '<div class="hrow" data-k="' + x.k + '"><span class="hl">MA' + x.k + '</span>' +
+           '<span class="hc">' + x.c + '</span><span class="sp">🔊</span></div>';
+  }).join('');
+  Array.prototype.forEach.call(el.hist.querySelectorAll('.hrow'), function(row){
+    row.onclick = function(){ setInput(row.dataset.k); render(true); };
+  });
+}
+
+/* ---------- render ---------- */
+function render(spoken){
+  const raw = el.input.value.replace(/\D/g,'').slice(0,3);
+  el.input.value = raw;
+  el.chips.innerHTML = '';
+  if(!raw){
+    el.out.className = 'out'; el.cd.textContent = '—';
+    el.sub.textContent = 'Type or say a location number';
+    state.key = state.cd = null;
+    return;
+  }
+  const key = pad3(raw);
+  const cd = DATA[key];
+  state.key = key;
+  if(cd !== undefined){
+    state.cd = cd;
+    el.out.className = 'out ok';
+    el.cd.textContent = cd;
+    el.sub.textContent = 'MA' + key;
+    histQueue(key, cd, !!spoken);
+    if(spoken) speakRow(key, cd);
+    return;
+  }
+  state.cd = null;
+  el.out.className = 'out miss';
+  el.cd.textContent = 'Not on the sheet';
+  el.sub.textContent = 'MA' + key + ' isn’t listed';
+  const n = parseInt(key,10);
+  const near = KEYS.map(Number).filter(function(v){ return Math.abs(v-n) <= 8; })
+                    .sort(function(a,b){ return Math.abs(a-n) - Math.abs(b-n); }).slice(0,6);
+  if(near.length){
+    el.chips.innerHTML = near.map(function(v){
+      const k = pad3(v);
+      return '<div class="chip" data-v="' + k + '">MA' + k + ' · ' + DATA[k] + '</div>';
+    }).join('');
+    Array.prototype.forEach.call(el.chips.querySelectorAll('.chip'), function(c){
+      c.onclick = function(){ setInput(c.dataset.v); render(true); };
+    });
+  }
+  if(spoken && state.speak) say('M A ' + spell(key) + ' is not on the sheet.');
+}
+
+/* ---------- phrase handling ---------- */
+function handlePhrase(text){
+  const t = String(text).toLowerCase().trim();
+  if(!t) return;
+  const hasDigitish = /[0-9]/.test(t) || t.split(' ').some(function(w){ return WORD2DIGIT[w] !== undefined; });
+  if(!hasDigitish){
+    if(/\b(repeat|again|say again)\b/.test(t)){ if(state.lastSpoken) say(state.lastSpoken); setStatus('Repeating'); return; }
+    if(/\b(clear|reset)\b/.test(t)){ setInput(''); render(); setStatus('Cleared'); return; }
+    if(/\b(stop|quiet|silence|hush)\b/.test(t)){ setListen(false); setStatus('Listening off'); return; }
+    if(/\b(listen|start|go)\b/.test(t)){ setListen(true); return; }
+  }
+  const digits = parsePhrase(t);
+  if(!digits){ setStatus('Didn’t catch a number — try “six oh four”'); return; }
+  const now = Date.now();
+  const same = (digits === el.input.value && now - (state.lastPhraseAt||0) < 1500);
+  state.lastPhraseAt = now;
+  setInput(digits);
+  render(!same);
+  setStatus('Heard “' + t + '”');
+}
+
+/* ---------- speech in ---------- */
+function startRec(){
+  if(!SR) return;
+  if(state.recActive) return;
+  try{
+    const r = new SR();
+    r.lang = 'en-GB'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onresult = function(e){
+      let finalTxt = '', interimTxt = '';
+      for(let i = e.resultIndex; i < e.results.length; i++){
+        const tr = e.results[i][0].transcript;
+        if(e.results[i].isFinal) finalTxt += tr + ' '; else interimTxt += tr + ' ';
+      }
+      if(interimTxt.trim()) setStatus('“' + interimTxt.trim() + '”');
+      if(finalTxt.trim()) handlePhrase(finalTxt.trim());
+    };
+    r.onerror = function(ev){
+      if(ev.error === 'not-allowed' || ev.error === 'service-not-allowed'){
+        setListen(false);
+        setStatus('Mic blocked — allow microphone for this site, then tap the mic again');
+      } else if(ev.error === 'audio-capture'){
+        setListen(false); setStatus('No microphone found on this device');
+      }
+    };
+    r.onend = function(){
+      state.recActive = false;
+      if(state.listen) setTimeout(function(){ if(state.listen) startRec(); }, 300);
+    };
+    state.rec = r;
+    r.start();
+    state.recActive = true;
+    el.mic.classList.add('on');
+    el.out.classList.add('listening');
+    setStatus('Listening… say a number');
+  }catch(e){
+    state.recActive = false;
+    setStatus('Couldn’t start the mic');
+  }
+}
+function stopRec(){
+  try{ if(state.rec) state.rec.stop(); }catch(e){}
+  try{ if(state.rec) state.rec.abort && state.rec.abort(); }catch(e){}
+  state.recActive = false;
+  el.mic.classList.remove('on');
+  el.out.classList.remove('listening');
+}
+
+/* ---------- toggles ---------- */
+async function reqWake(){
+  try{ if('wakeLock' in navigator){ state.wake = await navigator.wakeLock.request('screen'); } }catch(e){}
+}
+function relWake(){ try{ if(state.wake) state.wake.release(); }catch(e){} state.wake = null; }
+
+function setListen(on){
+  state.listen = !!on;
+  el.tListen.classList.toggle('on', state.listen);
+  savePrefs();
+  if(state.listen){
+    if(!SR){ setStatus('This browser has no voice engine — use the keyboard mic'); return; }
+    startRec(); reqWake();
+  } else {
+    stopRec(); relWake(); setStatus('Listening off');
+  }
+}
+
+el.tListen.onclick = function(){ setListen(!state.listen); };
+el.tSpeak.onclick = function(){
+  state.speak = !state.speak;
+  el.tSpeak.classList.toggle('on', state.speak);
+  if(!state.speak && CAN_SPEAK){ try{ window.speechSynthesis.cancel(); }catch(e){} }
+  savePrefs();
+};
+el.tPad.onclick = function(){
+  state.pad = !state.pad;
+  el.pad.classList.toggle('show', state.pad);
+  el.tPad.classList.toggle('on', state.pad);
+  savePrefs();
+};
+
+el.mic.onclick = function(){
+  if(!SR){ setStatus('No voice engine here — tap the mic on your keyboard instead'); return; }
+  if(state.listen){ setListen(false); }
+  else { setListen(true); }
+};
+
+/* ---------- keypad ---------- */
+Array.prototype.forEach.call(el.pad.querySelectorAll('button'), function(b){
+  b.onclick = function(){
+    const d = b.dataset.d, a = b.dataset.a;
+    let v = el.input.value.replace(/\D/g,'');
+    if(d !== undefined){ if(v.length < 3) v += d; }
+    else if(a === 'del'){ v = v.slice(0,-1); }
+    else if(a === 'clear'){ v = ''; }
+    setInput(v); render();
+  };
+});
+
+/* ---------- misc wiring ---------- */
+el.input.addEventListener('input', function(){ render(); });
+el.input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ render(true); } });
+
+document.getElementById('toggle').onclick = function(){ el.all.classList.toggle('show'); };
+el.all.innerHTML = KEYS.map(function(k){
+  return '<div class="row"><span>MA' + k + '</span><b>' + DATA[k] + '</b></div>';
+}).join('');
+document.getElementById('hclear').onclick = function(){
+  try{ localStorage.removeItem('cd.hist'); }catch(e){}
+  drawHist();
+};
+
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && state.listen) reqWake();
+});
+
+/* ---------- boot ---------- */
+loadPrefs();
+el.tSpeak.classList.toggle('on', state.speak);
+el.tPad.classList.toggle('on', state.pad);
+el.pad.classList.toggle('show', state.pad);
+drawHist();
+el.badge.textContent = KEYS.length + ' rows';
+
+const notes = [];
+if(!SR) notes.push('Voice input isn’t available in this browser — on iPhone tap the 🎤 key on the keyboard, or type the number.');
+if(!CAN_SPEAK) notes.push('Spoken answers aren’t supported in this browser.');
+if(SR && location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)){
+  notes.push('Voice needs HTTPS — open this page over https.');
+}
+el.note.textContent = notes.join(' ');
+
+const q = new URLSearchParams(location.search).get('loc');
+if(q){ setInput(q); }
+render();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('./sw.js').catch(function(){}); });
+}
+
+window.CD = { parsePhrase: parsePhrase, handlePhrase: handlePhrase, state: state,
+              data: DATA, render: render, setListen: setListen, hasSR: !!SR, canSpeak: CAN_SPEAK };
+</script>
+</body>
+</html>
