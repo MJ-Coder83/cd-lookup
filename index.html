@@ -214,7 +214,8 @@ const el = {
 };
 
 const state = { listen:false, speak:true, pad:false, key:null, cd:null,
-                rec:null, recActive:false, lastSpoken:'', wake:null };
+                rec:null, recActive:false, lastSpoken:'', wake:null,
+                speaking:false, suppressUntil:0, spokenKey:null, spokenAt:0, lastHeard:'', lastHeardAt:0 };
 
 /* ---------- prefs ---------- */
 function savePrefs(){
@@ -259,24 +260,34 @@ function parsePhrase(text){
 let speechTimer = null;
 function say(text){
   if(!state.speak || !CAN_SPEAK || !text) return;
-  const wasActive = state.recActive;
-  if(wasActive) stopRec();
+  if(state.recActive) stopRec();
   state.lastSpoken = text;
+  state.speaking = true;
+  let finished = false;
+  function done(){
+    if(finished) return;
+    finished = true;
+    state.speaking = false;
+    /* brief window after speech where anything the mic picks up is our own echo */
+    state.suppressUntil = Date.now() + 900;
+    if(state.listen) setTimeout(function(){ if(state.listen && !state.speaking) startRec(); }, 550);
+  }
   try{
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'en-GB'; u.rate = 0.95; u.pitch = 1;
-    u.onend = function(){ if(state.listen) setTimeout(startRec, 400); };
+    u.onend = done;
+    u.onerror = done;
     window.speechSynthesis.speak(u);
-    /* watchdog: some browsers never fire onend — don't strand the mic */
-    if(state.listen){
-      if(speechTimer) clearTimeout(speechTimer);
-      speechTimer = setTimeout(function(){ if(state.listen && !state.recActive) startRec(); }, 6000);
-    }
-  }catch(e){}
+    if(speechTimer) clearTimeout(speechTimer);
+    /* watchdog: a silent or stuck engine must not keep the mic shut forever */
+    speechTimer = setTimeout(done, 8000);
+  }catch(e){ done(); }
 }
 
 function speakRow(key, cd){
+  state.spokenKey = String(key);
+  state.spokenAt = Date.now();
   say('M A ' + spell(key) + '. C D ' + spell(cd) + '.');
 }
 
@@ -370,6 +381,12 @@ function render(spoken){
 function handlePhrase(text){
   const t = String(text).toLowerCase().trim();
   if(!t) return;
+  if(state.speaking) return;                     /* never react to our own voice */
+  if(Date.now() < state.suppressUntil) return;   /* echo window right after an answer */
+  const probe = parsePhrase(t);
+  if(probe && probe === state.spokenKey && (Date.now() - state.spokenAt) < 5000){
+    return;                                      /* heard our own announcement */
+  }
   const hasDigitish = /[0-9]/.test(t) || t.split(' ').some(function(w){ return WORD2DIGIT[w] !== undefined; });
   if(!hasDigitish){
     if(/\b(repeat|again|say again)\b/.test(t)){ if(state.lastSpoken) say(state.lastSpoken); setStatus('Repeating'); return; }
@@ -390,11 +407,13 @@ function handlePhrase(text){
 /* ---------- speech in ---------- */
 function startRec(){
   if(!SR) return;
+  if(state.speaking) return;   /* mic stays shut until the answer has been spoken */
   if(state.recActive) return;
   try{
     const r = new SR();
     r.lang = 'en-GB'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
     r.onresult = function(e){
+      if(state.speaking) return;
       let finalTxt = '', interimTxt = '';
       for(let i = e.resultIndex; i < e.results.length; i++){
         const tr = e.results[i][0].transcript;
@@ -413,7 +432,7 @@ function startRec(){
     };
     r.onend = function(){
       state.recActive = false;
-      if(state.listen) setTimeout(function(){ if(state.listen) startRec(); }, 300);
+      if(state.listen && !state.speaking) setTimeout(function(){ if(state.listen && !state.speaking) startRec(); }, 300);
     };
     state.rec = r;
     r.start();
@@ -709,7 +728,7 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', function(){ navigator.serviceWorker.register('./sw.js').catch(function(){}); });
 }
 
-window.CD = { parsePhrase: parsePhrase, handlePhrase: handlePhrase, state: state,
+window.CD = { parsePhrase: parsePhrase, handlePhrase: handlePhrase, state: state, say: say, startRec: startRec,
               data: DATA, render: render, setListen: setListen, hasSR: !!SR, canSpeak: CAN_SPEAK };
 </script>
 </body>
