@@ -73,13 +73,34 @@
         border:1px solid var(--line);border-radius:13px;margin-bottom:7px;cursor:pointer}
   .hrow .hl{color:#9aa6b4;font-size:14px;letter-spacing:.04em;font-variant-numeric:tabular-nums}
   .hrow .hc{margin-left:auto;color:var(--accent);font-weight:800;font-size:20px;font-variant-numeric:tabular-nums}
+  .hrow .ht{font-size:11.5px;color:#5b6673;margin-left:8px;letter-spacing:.02em}
   .hrow .sp{opacity:.5;font-size:15px}
   .empty{color:#5b6673;font-size:13px;padding:4px}
   .btn{width:100%;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:12px;
        padding:12px;font-size:13px;cursor:pointer;margin-top:6px}
-  .all{margin-top:12px;display:none;max-height:46vh;overflow:auto;border:1px solid var(--line);
-       border-radius:14px;background:var(--card)}
-  .all.show{display:block}
+  .seg{display:flex;gap:6px;margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px}
+  .seg button{flex:1;background:none;border:0;color:var(--dim);padding:10px;border-radius:11px;font-size:13px;font-weight:600;cursor:pointer}
+  .seg button.on{background:var(--card2);color:var(--txt)}
+  .panel{display:none}
+  .panel.show{display:block}
+  .planwrap{position:relative;margin-top:10px;height:54vh;min-height:300px;border:1px solid var(--line);
+            border-radius:16px;background:#0e1318;overflow:hidden;touch-action:none}
+  .stage{position:absolute;left:0;top:0;transform-origin:0 0;--s:1}
+  .stage img{display:block;width:100%;height:100%;object-fit:fill;opacity:.95;user-select:none;-webkit-user-drag:none}
+  .mk{position:absolute;transform:translate(-50%,-50%) scale(calc(1/var(--s)));transform-origin:center;
+      display:flex;flex-direction:column;align-items:center;background:#121a20f2;border:1px solid #2b3742;
+      color:#cfd8e3;border-radius:10px;padding:3px 7px;cursor:pointer;font-variant-numeric:tabular-nums;line-height:1.1}
+  .mk .mkl{font-size:10px;color:#8b96a5;letter-spacing:.04em}
+  .mk .mkc{font-size:15px;font-weight:800;color:var(--accent)}
+  .mk.sel{border-color:var(--accent);box-shadow:0 0 0 2px #3ddc9744;background:#12352a}
+  .mk.dim{opacity:.2}
+  .mk.hit{border-color:var(--warn);background:#241d12}
+  .zoombar{position:absolute;right:10px;bottom:10px;display:flex;gap:6px}
+  .zoombar button{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:#14181de6;color:var(--txt);font-size:18px;cursor:pointer}
+  .find{width:100%;margin-top:10px;padding:13px 15px;font-size:16px;background:var(--card);border:1px solid var(--line);border-radius:13px;color:var(--txt);outline:none}
+  .find:focus{border-color:#3ddc9755}
+  .rows{margin-top:10px;max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+  .planhint{margin:8px 4px 0;font-size:11.5px;color:#55606d;min-height:16px}
   .row{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #1e242c;
        font-variant-numeric:tabular-nums;font-size:14px}
   .row:last-child{border-bottom:0}
@@ -128,8 +149,26 @@
     <div id="hist"><div class="empty">Nothing yet</div></div>
   </div>
 
-  <button class="btn" id="toggle">Browse all rows</button>
-  <div class="all" id="all"></div>
+  <div class="seg">
+    <button id="segPlan" class="on">Floor plan</button>
+    <button id="segList">List</button>
+  </div>
+
+  <div class="panel show" id="planPanel">
+    <div class="planwrap" id="planwrap">
+      <div class="stage" id="stage">
+        <img id="planimg" alt="Floor plan" src="./plan.png">
+        <div id="markers"></div>
+      </div>
+      <div class="zoombar"><button id="zout" aria-label="Zoom out">−</button><button id="zin" aria-label="Zoom in">+</button><button id="zfit" aria-label="Fit">⤢</button></div>
+    </div>
+    <div class="planhint" id="planhint"></div>
+  </div>
+
+  <div class="panel" id="listPanel">
+    <input class="find" id="find" placeholder="Search location or CD" autocomplete="off" spellcheck="false">
+    <div class="rows" id="rows"></div>
+  </div>
   <div class="note" id="note"></div>
 </div>
 
@@ -157,7 +196,16 @@ const el = {
   hist: document.getElementById('hist'),
   all: document.getElementById('all'),
   badge: document.getElementById('badge'),
-  note: document.getElementById('note')
+  note: document.getElementById('note'),
+  stage: document.getElementById('stage'),
+  markers: document.getElementById('markers'),
+  wrap: document.getElementById('planwrap'),
+  planimg: document.getElementById('planimg'),
+  planhint: document.getElementById('planhint'),
+  find: document.getElementById('find'),
+  rows: document.getElementById('rows'),
+  planPanel: document.getElementById('planPanel'),
+  listPanel: document.getElementById('listPanel')
 };
 
 const state = { listen:false, speak:true, pad:false, key:null, cd:null,
@@ -245,11 +293,25 @@ function histQueue(key, cd, immediate){
   if(immediate){ histPush(key, cd); return; }
   histTimer = setTimeout(function(){ histPush(key, cd); }, 650);
 }
+function timeAgo(t){
+  if(!t) return '';
+  const d = new Date(t), now = new Date();
+  const s = Math.floor((now - d) / 1000);
+  if(s < 45) return 'just now';
+  if(s < 3600) return Math.floor(s / 60) + 'm ago';
+  const hm = d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  if(d.toDateString() === now.toDateString()) return hm;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if(d.toDateString() === y.toDateString()) return 'Yesterday ' + hm;
+  return d.toLocaleDateString([], {weekday: 'short'}) + ' ' + hm;
+}
+
 function drawHist(){
   const h = histGet().slice(0,8);
   if(!h.length){ el.hist.innerHTML = '<div class="empty">Nothing yet</div>'; return; }
   el.hist.innerHTML = h.map(function(x){
     return '<div class="hrow" data-k="' + x.k + '"><span class="hl">MA' + x.k + '</span>' +
+           '<span class="ht">' + timeAgo(x.t) + '</span>' +
            '<span class="hc">' + x.c + '</span><span class="sp">🔊</span></div>';
   }).join('');
   Array.prototype.forEach.call(el.hist.querySelectorAll('.hrow'), function(row){
@@ -421,10 +483,138 @@ Array.prototype.forEach.call(el.pad.querySelectorAll('button'), function(b){
 el.input.addEventListener('input', function(){ render(); });
 el.input.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ render(true); } });
 
-document.getElementById('toggle').onclick = function(){ el.all.classList.toggle('show'); };
-el.all.innerHTML = KEYS.map(function(k){
-  return '<div class="row"><span>MA' + k + '</span><b>' + DATA[k] + '</b></div>';
-}).join('');
+/* ---------- floor plan ---------- */
+const PLAN = {"image":"./plan.png","w":1800,"h":1300,"points":{"001":[3.57,3.6],"002":[10.71,3.6],"003":[17.86,3.6],"004":[25.0,3.6],"005":[32.14,3.6],"006":[39.29,3.6],"007":[46.43,3.6],"008":[53.57,3.6],"009":[60.71,3.6],"010":[67.86,3.6],"011":[75.0,3.6],"012":[82.14,3.6],"013":[89.29,3.6],"014":[96.43,3.6],"015":[3.57,7.6],"016":[10.71,7.6],"017":[17.86,7.6],"018":[25.0,7.6],"019":[32.14,7.6],"020":[39.29,7.6],"500":[46.43,7.6],"501":[53.57,7.6],"502":[60.71,7.6],"503":[67.86,7.6],"504":[75.0,7.6],"505":[82.14,7.6],"506":[89.29,7.6],"507":[96.43,7.6],"508":[3.57,11.6],"509":[10.71,11.6],"510":[17.86,11.6],"511":[25.0,11.6],"512":[32.14,11.6],"513":[39.29,11.6],"514":[46.43,11.6],"515":[53.57,11.6],"516":[60.71,11.6],"517":[67.86,11.6],"518":[75.0,11.6],"519":[82.14,11.6],"520":[89.29,11.6],"521":[96.43,11.6],"522":[3.57,15.6],"523":[10.71,15.6],"524":[17.86,15.6],"525":[25.0,15.6],"526":[32.14,15.6],"527":[39.29,15.6],"528":[46.43,15.6],"529":[53.57,15.6],"530":[60.71,15.6],"531":[67.86,15.6],"532":[75.0,15.6],"533":[82.14,15.6],"534":[89.29,15.6],"535":[96.43,15.6],"536":[3.57,19.6],"537":[10.71,19.6],"538":[17.86,19.6],"539":[25.0,19.6],"540":[32.14,19.6],"541":[39.29,19.6],"542":[46.43,19.6],"543":[53.57,19.6],"544":[60.71,19.6],"545":[67.86,19.6],"546":[75.0,19.6],"547":[82.14,19.6],"548":[89.29,19.6],"549":[96.43,19.6],"550":[3.57,23.6],"551":[10.71,23.6],"552":[17.86,23.6],"553":[25.0,23.6],"554":[32.14,23.6],"555":[39.29,23.6],"556":[46.43,23.6],"557":[53.57,23.6],"558":[60.71,23.6],"559":[67.86,23.6],"560":[75.0,23.6],"561":[82.14,23.6],"562":[89.29,23.6],"563":[96.43,23.6],"564":[3.57,27.6],"565":[10.71,27.6],"566":[17.86,27.6],"567":[25.0,27.6],"568":[32.14,27.6],"569":[39.29,27.6],"570":[46.43,27.6],"571":[53.57,27.6],"572":[60.71,27.6],"573":[67.86,27.6],"574":[75.0,27.6],"575":[82.14,27.6],"576":[89.29,27.6],"577":[96.43,27.6],"578":[3.57,31.6],"579":[10.71,31.6],"580":[17.86,31.6],"581":[25.0,31.6],"582":[32.14,31.6],"583":[39.29,31.6],"584":[46.43,31.6],"585":[53.57,31.6],"586":[60.71,31.6],"587":[67.86,31.6],"588":[75.0,31.6],"589":[82.14,31.6],"590":[89.29,31.6],"591":[96.43,31.6],"592":[3.57,35.6],"593":[10.71,35.6],"594":[17.86,35.6],"595":[25.0,35.6],"596":[32.14,35.6],"597":[39.29,35.6],"598":[46.43,35.6],"599":[53.57,35.6],"600":[60.71,35.6],"601":[67.86,35.6],"602":[75.0,35.6],"603":[82.14,35.6],"604":[89.29,35.6],"606":[96.43,35.6],"607":[3.57,39.6],"608":[10.71,39.6],"609":[17.86,39.6],"610":[25.0,39.6],"611":[32.14,39.6],"612":[39.29,39.6],"613":[46.43,39.6],"614":[53.57,39.6],"615":[60.71,39.6],"616":[67.86,39.6],"617":[75.0,39.6],"618":[82.14,39.6],"619":[89.29,39.6],"620":[96.43,39.6],"621":[3.57,43.6],"622":[10.71,43.6],"623":[17.86,43.6],"624":[25.0,43.6],"625":[32.14,43.6],"626":[39.29,43.6],"627":[46.43,43.6],"628":[53.57,43.6],"629":[60.71,43.6],"630":[67.86,43.6],"631":[75.0,43.6],"632":[82.14,43.6],"633":[89.29,43.6],"634":[96.43,43.6],"635":[3.57,47.6],"636":[10.71,47.6],"637":[17.86,47.6],"638":[25.0,47.6],"639":[32.14,47.6],"640":[39.29,47.6],"641":[46.43,47.6],"642":[53.57,47.6],"643":[60.71,47.6],"644":[67.86,47.6],"645":[75.0,47.6],"646":[82.14,47.6],"647":[89.29,47.6],"648":[96.43,47.6],"649":[3.57,51.6],"650":[10.71,51.6],"651":[17.86,51.6],"652":[25.0,51.6],"653":[32.14,51.6],"654":[39.29,51.6],"655":[46.43,51.6],"656":[53.57,51.6],"657":[60.71,51.6],"658":[67.86,51.6],"659":[75.0,51.6],"700":[82.14,51.6],"701":[89.29,51.6],"702":[96.43,51.6],"703":[3.57,55.6],"704":[10.71,55.6],"705":[17.86,55.6],"706":[25.0,55.6],"707":[32.14,55.6],"708":[39.29,55.6],"709":[46.43,55.6],"710":[53.57,55.6],"711":[60.71,55.6],"712":[67.86,55.6],"713":[75.0,55.6],"714":[82.14,55.6],"715":[89.29,55.6],"716":[96.43,55.6],"717":[3.57,59.6],"718":[10.71,59.6],"719":[17.86,59.6],"720":[25.0,59.6],"721":[32.14,59.6],"722":[39.29,59.6],"723":[46.43,59.6],"724":[53.57,59.6],"725":[60.71,59.6],"726":[67.86,59.6],"727":[75.0,59.6],"728":[82.14,59.6],"729":[89.29,59.6],"730":[96.43,59.6],"731":[3.57,63.6],"732":[10.71,63.6],"733":[17.86,63.6],"734":[25.0,63.6],"735":[32.14,63.6],"736":[39.29,63.6],"737":[46.43,63.6],"738":[53.57,63.6],"739":[60.71,63.6],"740":[67.86,63.6],"741":[75.0,63.6],"742":[82.14,63.6],"743":[89.29,63.6],"744":[96.43,63.6],"745":[3.57,67.6],"746":[10.71,67.6],"747":[17.86,67.6],"748":[25.0,67.6],"749":[32.14,67.6],"750":[39.29,67.6],"751":[46.43,67.6],"752":[53.57,67.6],"753":[60.71,67.6],"754":[67.86,67.6],"755":[75.0,67.6],"756":[82.14,67.6],"757":[89.29,67.6],"758":[96.43,67.6],"759":[3.57,71.6],"760":[10.71,71.6],"761":[17.86,71.6],"762":[25.0,71.6],"763":[32.14,71.6],"764":[39.29,71.6],"765":[46.43,71.6],"766":[53.57,71.6],"767":[60.71,71.6],"768":[67.86,71.6],"769":[75.0,71.6],"770":[82.14,71.6],"771":[89.29,71.6],"772":[96.43,71.6],"773":[3.57,75.6],"774":[10.71,75.6],"775":[17.86,75.6],"776":[25.0,75.6],"777":[32.14,75.6],"778":[39.29,75.6],"779":[46.43,75.6],"780":[53.57,75.6],"781":[60.71,75.6],"782":[67.86,75.6],"783":[75.0,75.6],"784":[82.14,75.6],"785":[89.29,75.6],"786":[96.43,75.6],"787":[3.57,79.6],"788":[10.71,79.6],"789":[17.86,79.6],"790":[25.0,79.6],"791":[32.14,79.6],"792":[39.29,79.6],"793":[46.43,79.6],"794":[53.57,79.6],"795":[60.71,79.6],"796":[67.86,79.6],"797":[75.0,79.6],"798":[82.14,79.6],"799":[89.29,79.6],"800":[96.43,79.6],"801":[3.57,83.6],"802":[10.71,83.6],"803":[17.86,83.6],"804":[25.0,83.6],"805":[32.14,83.6],"806":[39.29,83.6],"807":[46.43,83.6],"808":[53.57,83.6],"809":[60.71,83.6],"810":[67.86,83.6],"811":[75.0,83.6],"812":[82.14,83.6],"813":[89.29,83.6],"814":[96.43,83.6],"815":[3.57,87.6],"816":[10.71,87.6],"817":[17.86,87.6],"818":[25.0,87.6],"819":[32.14,87.6],"820":[39.29,87.6],"821":[46.43,87.6],"822":[53.57,87.6],"823":[60.71,87.6],"824":[67.86,87.6],"825":[75.0,87.6],"826":[82.14,87.6],"827":[89.29,87.6],"828":[96.43,87.6],"829":[3.57,91.6],"830":[10.71,91.6],"831":[17.86,91.6],"832":[25.0,91.6],"833":[32.14,91.6],"834":[39.29,91.6],"835":[46.43,91.6],"836":[53.57,91.6],"837":[60.71,91.6],"838":[67.86,91.6],"839":[75.0,91.6],"840":[82.14,91.6],"841":[89.29,91.6],"842":[96.43,91.6],"843":[3.57,95.6],"844":[10.71,95.6],"845":[17.86,95.6],"846":[25.0,95.6],"847":[32.14,95.6],"848":[39.29,95.6],"849":[46.43,95.6],"850":[53.57,95.6],"851":[60.71,95.6],"852":[67.86,95.6],"853":[75.0,95.6],"854":[82.14,95.6],"855":[89.29,95.6],"856":[96.43,95.6],"857":[3.57,99.6],"858":[10.71,99.6],"859":[17.86,99.6],"860":[25.0,99.6],"861":[32.14,99.6],"862":[39.29,99.6],"863":[46.43,99.6]}};
+const view = { s: 1, x: 0, y: 0 };
+
+function applyView(){
+  el.stage.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.s + ')';
+  el.stage.style.setProperty('--s', view.s);
+}
+function clampS(s){ return Math.min(8, Math.max(0.25, s)); }
+function zoomBy(f){
+  const rect = el.wrap.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
+  const ns = clampS(view.s * f);
+  view.x = cx - (cx - view.x) * (ns / view.s);
+  view.y = cy - (cy - view.y) * (ns / view.s);
+  view.s = ns;
+  applyView();
+}
+function fitPlan(){
+  const rect = el.wrap.getBoundingClientRect();
+  const s = Math.min(rect.width / PLAN.w, rect.height / PLAN.h) * 0.98;
+  view.s = clampS(s);
+  view.x = (rect.width - PLAN.w * view.s) / 2;
+  view.y = (rect.height - PLAN.h * view.s) / 2;
+  applyView();
+}
+function focusKey(k){
+  const p = PLAN.points[k];
+  if(!p) return;
+  const rect = el.wrap.getBoundingClientRect();
+  view.x = rect.width / 2 - (p[0] / 100) * PLAN.w * view.s;
+  view.y = rect.height / 2 - (p[1] / 100) * PLAN.h * view.s;
+  applyView();
+}
+
+function selectKey(k, spoken){
+  Array.prototype.forEach.call(el.markers.querySelectorAll('.mk'), function(m){
+    m.classList.toggle('sel', m.dataset.k === k);
+  });
+  setInput(k); render(!!spoken);
+  focusKey(k);
+}
+
+function buildPlan(){
+  el.stage.style.width = PLAN.w + 'px';
+  el.stage.style.height = PLAN.h + 'px';
+  const placed = KEYS.filter(function(k){ return PLAN.points[k]; });
+  el.markers.innerHTML = placed.map(function(k){
+    const p = PLAN.points[k];
+    return '<button class="mk" data-k="' + k + '" style="left:' + p[0] + '%;top:' + p[1] + '%">' +
+           '<span class="mkl">MA' + k + '</span><span class="mkc">' + DATA[k] + '</span></button>';
+  }).join('');
+  Array.prototype.forEach.call(el.markers.querySelectorAll('.mk'), function(m){
+    m.onclick = function(){ selectKey(m.dataset.k, true); };
+  });
+  const missing = KEYS.length - placed.length;
+  el.planhint.textContent = placed.length + ' locations on the plan' +
+    (missing ? ' · ' + missing + ' not placed yet' : '');
+  el.planimg.onload = fitPlan;
+  if(el.planimg.complete) fitPlan(); else setTimeout(fitPlan, 300);
+
+  el.rows.innerHTML = KEYS.map(function(k){
+    return '<div class="row" data-k="' + k + '"><span>MA' + k + '</span><b>' + DATA[k] + '</b></div>';
+  }).join('');
+  Array.prototype.forEach.call(el.rows.querySelectorAll('.row'), function(r){
+    r.onclick = function(){ selectKey(r.dataset.k, true); };
+  });
+}
+
+/* drag / wheel / pinch */
+let drag = null, pinch = null, pts = {};
+function tdist(t){ const a = t[0], b = t[1]; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1; }
+el.wrap.addEventListener('pointerdown', function(e){
+  if(e.target.closest('.mk') || e.target.closest('.zoombar')) return;
+  drag = {x: e.clientX - view.x, y: e.clientY - view.y};
+  try{ el.wrap.setPointerCapture(e.pointerId); }catch(err){}
+});
+el.wrap.addEventListener('pointermove', function(e){
+  if(!drag) return;
+  view.x = e.clientX - drag.x; view.y = e.clientY - drag.y; applyView();
+});
+el.wrap.addEventListener('pointerup', function(){ drag = null; });
+el.wrap.addEventListener('pointercancel', function(){ drag = null; });
+el.wrap.addEventListener('wheel', function(e){
+  e.preventDefault(); zoomBy(e.deltaY > 0 ? 0.88 : 1.14);
+}, {passive: false});
+el.wrap.addEventListener('touchstart', function(e){
+  if(e.touches.length === 2) pinch = {d: tdist(e.touches), s: view.s};
+}, {passive: true});
+el.wrap.addEventListener('touchmove', function(e){
+  if(pinch && e.touches.length === 2){
+    e.preventDefault();
+    view.s = clampS(pinch.s * tdist(e.touches) / pinch.d);
+    applyView();
+  }
+}, {passive: false});
+el.wrap.addEventListener('touchend', function(){ pinch = null; });
+
+document.getElementById('zin').onclick = function(){ zoomBy(1.25); };
+document.getElementById('zout').onclick = function(){ zoomBy(0.8); };
+document.getElementById('zfit').onclick = fitPlan;
+
+/* plan / list switch */
+function showPanel(which){
+  const isPlan = which === 'plan';
+  el.planPanel.classList.toggle('show', isPlan);
+  el.listPanel.classList.toggle('show', !isPlan);
+  document.getElementById('segPlan').classList.toggle('on', isPlan);
+  document.getElementById('segList').classList.toggle('on', !isPlan);
+  if(isPlan) setTimeout(fitPlan, 30);
+}
+document.getElementById('segPlan').onclick = function(){ showPanel('plan'); };
+document.getElementById('segList').onclick = function(){ showPanel('list'); };
+
+/* search: location or CD */
+el.find.addEventListener('input', function(){
+  const q = el.find.value.trim().toLowerCase();
+  let firstHit = null;
+  Array.prototype.forEach.call(el.markers.querySelectorAll('.mk'), function(m){
+    const k = m.dataset.k, c = DATA[k];
+    const hit = !q || k.indexOf(q) !== -1 || c === q || c.indexOf(q) === 0;
+    m.classList.toggle('dim', !hit);
+    m.classList.toggle('hit', !!q && hit);
+    if(q && hit && !firstHit) firstHit = k;
+  });
+  Array.prototype.forEach.call(el.rows.querySelectorAll('.row'), function(r){
+    const k = r.dataset.k, c = DATA[k];
+    const hit = !q || k.indexOf(q) !== -1 || c === q || c.indexOf(q) === 0;
+    r.style.display = hit ? '' : 'none';
+  });
+  if(q && firstHit){ focusKey(firstHit); }
+});
 document.getElementById('hclear').onclick = function(){
   try{ localStorage.removeItem('cd.hist'); }catch(e){}
   drawHist();
@@ -432,7 +622,9 @@ document.getElementById('hclear').onclick = function(){
 
 document.addEventListener('visibilitychange', function(){
   if(document.visibilityState === 'visible' && state.listen) reqWake();
+  if(document.visibilityState === 'visible') drawHist();
 });
+setInterval(function(){ if(!document.hidden) drawHist(); }, 30000);
 
 /* ---------- boot ---------- */
 loadPrefs();
@@ -449,6 +641,8 @@ if(SR && location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(lo
   notes.push('Voice needs HTTPS — open this page over https.');
 }
 el.note.textContent = notes.join(' ');
+
+buildPlan();
 
 const q = new URLSearchParams(location.search).get('loc');
 if(q){ setInput(q); }
