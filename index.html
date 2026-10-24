@@ -520,6 +520,8 @@ function focusKey(k){
   const p = PLAN.points[k];
   if(!p) return;
   const rect = el.wrap.getBoundingClientRect();
+  /* when the whole plan already fits, panning to a marker would shove it off-centre */
+  if(PLAN.w * view.s <= rect.width && PLAN.h * view.s <= rect.height) return;
   view.x = rect.width / 2 - (p[0] / 100) * PLAN.w * view.s;
   view.y = rect.height / 2 - (p[1] / 100) * PLAN.h * view.s;
   applyView();

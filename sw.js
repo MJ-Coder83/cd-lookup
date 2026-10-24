@@ -1,4 +1,4 @@
-const V = 'cd-v7';
+const V = 'cd-v8';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './plan.png'];
 
 self.addEventListener('install', e => {
